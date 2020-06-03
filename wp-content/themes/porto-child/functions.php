@@ -17,7 +17,47 @@ function porto_child_css() {
 	}
 }
 
+/**
+* Move WooCommerce subcategory list items into
+* their own <ul> separate from the product <ul>.
+*/
 
+add_action( 'init', 'move_subcat_lis' );
+
+function move_subcat_lis() {
+	// Remove the subcat <li>s from the old location.
+	remove_filter( 'woocommerce_product_loop_start', 'woocommerce_maybe_show_product_subcategories' );
+	add_action( 'woocommerce_before_shop_loop', 'msc_product_loop_start', 1 );
+	add_action( 'woocommerce_before_shop_loop', 'msc_maybe_show_product_subcategories', 2 );
+	add_action( 'woocommerce_before_shop_loop', 'msc_product_loop_end', 3 );
+}
+
+/**
+ * Conditonally start the product loop with a <ul> contaner if subcats exist.
+ */
+function msc_product_loop_start() {
+	$subcategories = woocommerce_maybe_show_product_subcategories();
+	if ( $subcategories ) {
+		woocommerce_product_loop_start();
+	}
+}
+
+/**
+ * Print the subcat <li>s in our new location.
+ */
+function msc_maybe_show_product_subcategories() {
+	echo woocommerce_maybe_show_product_subcategories();
+}
+
+/**
+ * Conditonally end the product loop with a </ul> if subcats exist.
+ */
+function msc_product_loop_end() {
+	$subcategories = woocommerce_maybe_show_product_subcategories();
+	if ( $subcategories ) {
+		woocommerce_product_loop_end();
+	}
+}
 
 
 /**WC Отключение оплаты при оформлении**/
@@ -53,45 +93,6 @@ return $items;
 }
 
 
-/**
- * Дополнительное  описание категории
- **/
-
-function wpm_taxonomy_edit_meta_field( $term ) {
-	$t_id      = $term->term_id;
-	$term_meta = get_option( "taxonomy_$t_id" );
-	$content   = $term_meta['custom_term_meta'] ? wp_kses_post( $term_meta['custom_term_meta'] ) : '';
-	$settings  = array( 'textarea_name' => 'term_meta[custom_term_meta]' );
-	?>
-    <tr class="form-field">
-        <th scope="row" valign="top"><label for="term_meta[custom_term_meta]">Дополнительное описание</label></th>
-        <td>
-			<?php wp_editor( $content, 'product_cat_details', $settings ); ?>
-        </td>
-    </tr>
-	<?php
-}
-
-add_action( 'product_cat_edit_form_fields', 'wpm_taxonomy_edit_meta_field', 10, 2 );
-
-function save_taxonomy_custom_meta( $term_id ) {
-	if ( isset( $_POST['term_meta'] ) ) {
-		$t_id      = $term_id;
-		$term_meta = get_option( "taxonomy_$t_id" );
-		$cat_keys  = array_keys( $_POST['term_meta'] );
-		foreach ( $cat_keys as $key ) {
-			if ( isset ( $_POST['term_meta'][ $key ] ) ) {
-				$term_meta[ $key ] = wp_kses_post( stripslashes( $_POST['term_meta'][ $key ] ) );
-			}
-		}
-		update_option( "taxonomy_$t_id", $term_meta );
-	}
-}
-
-add_action( 'edited_product_cat', 'save_taxonomy_custom_meta', 10, 2 );
-add_action( 'create_product_cat', 'save_taxonomy_custom_meta', 10, 2 );
-
-
 
 
 /**
@@ -114,3 +115,56 @@ function change_attachement_image_attributes( $attr, $attachment ) {
 	return $attr;
 }
 add_filter( 'wp_get_attachment_image_attributes', 'change_attachement_image_attributes', 20, 2 );
+
+
+
+
+
+add_action( 'product_cat_edit_form_fields', 'wpm_taxonomy_edit_meta_field', 10, 2 );
+
+function wpm_taxonomy_edit_meta_field($term) {
+$t_id = $term->term_id;
+$term_meta = get_option( "taxonomy_$t_id" );
+$content = $term_meta['custom_term_meta'] ? wp_kses_post( $term_meta['custom_term_meta'] ) : '';
+$settings = array( 'textarea_name' => 'term_meta[custom_term_meta]' );
+?>
+<tr class="form-field">
+<th scope="row" valign="top"><label for="term_meta[custom_term_meta]">Дополнительное описание</label></th>
+<td>
+<?php wp_editor( $content, 'product_cat_details', $settings ); ?>
+</td>
+</tr>
+<?php
+}
+
+add_action( 'edited_product_cat', 'save_taxonomy_custom_meta', 10, 2 );
+add_action( 'create_product_cat', 'save_taxonomy_custom_meta', 10, 2 );
+
+function save_taxonomy_custom_meta( $term_id ) {
+  if ( isset( $_POST['term_meta'] ) ) {
+    $t_id = $term_id;
+    $term_meta = get_option( "taxonomy_$t_id" );
+    $cat_keys = array_keys( $_POST['term_meta'] );
+    foreach ( $cat_keys as $key ) {
+      if ( isset ( $_POST['term_meta'][$key] ) ) {
+        $term_meta[$key] = wp_kses_post( stripslashes($_POST['term_meta'][$key]) );
+      }
+    }
+    update_option( "taxonomy_$t_id", $term_meta );
+  }
+}
+
+add_action( 'woocommerce_after_shop_loop', 'wpm_product_cat_archive_add_meta' );
+
+function wpm_product_cat_archive_add_meta() {
+  $t_id = get_queried_object()->term_id;
+  $term_meta = get_option( "taxonomy_$t_id" );
+  $term_meta_content = $term_meta['custom_term_meta'];
+  if ( $term_meta_content != '' ) {
+    if ( is_tax( array( 'product_cat', 'product_tag' ) ) && 0 === absint( get_query_var( 'paged' ) ) ) {
+      echo '<div class="woo-sc-box normal rounded full">';
+      echo apply_filters( 'the_content', $term_meta_content );
+      echo '</div>';
+    }
+  }
+}
