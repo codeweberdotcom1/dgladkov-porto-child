@@ -1,5 +1,6 @@
 <?php
 
+
 add_action( 'wp_enqueue_scripts', 'porto_child_css', 1001 );
 
 // Load CSS
